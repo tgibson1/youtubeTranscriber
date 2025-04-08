@@ -1,0 +1,14 @@
+/Users/timgibson/Repos/NewsSyndicate/passportBroNews/youtubeTranscriber/bin/Debug/net9.0/youtubeTranscriber
+/Users/timgibson/Repos/NewsSyndicate/passportBroNews/youtubeTranscriber/bin/Debug/net9.0/youtubeTranscriber.deps.json
+/Users/timgibson/Repos/NewsSyndicate/passportBroNews/youtubeTranscriber/bin/Debug/net9.0/youtubeTranscriber.runtimeconfig.json
+/Users/timgibson/Repos/NewsSyndicate/passportBroNews/youtubeTranscriber/bin/Debug/net9.0/youtubeTranscriber.dll
+/Users/timgibson/Repos/NewsSyndicate/passportBroNews/youtubeTranscriber/bin/Debug/net9.0/youtubeTranscriber.pdb
+/Users/timgibson/Repos/NewsSyndicate/passportBroNews/youtubeTranscriber/obj/Debug/net9.0/youtubeTranscriber.GeneratedMSBuildEditorConfig.editorconfig
+/Users/timgibson/Repos/NewsSyndicate/passportBroNews/youtubeTranscriber/obj/Debug/net9.0/youtubeTranscriber.AssemblyInfoInputs.cache
+/Users/timgibson/Repos/NewsSyndicate/passportBroNews/youtubeTranscriber/obj/Debug/net9.0/youtubeTranscriber.AssemblyInfo.cs
+/Users/timgibson/Repos/NewsSyndicate/passportBroNews/youtubeTranscriber/obj/Debug/net9.0/youtubeTranscriber.csproj.CoreCompileInputs.cache
+/Users/timgibson/Repos/NewsSyndicate/passportBroNews/youtubeTranscriber/obj/Debug/net9.0/youtubeTranscriber.dll
+/Users/timgibson/Repos/NewsSyndicate/passportBroNews/youtubeTranscriber/obj/Debug/net9.0/refint/youtubeTranscriber.dll
+/Users/timgibson/Repos/NewsSyndicate/passportBroNews/youtubeTranscriber/obj/Debug/net9.0/youtubeTranscriber.pdb
+/Users/timgibson/Repos/NewsSyndicate/passportBroNews/youtubeTranscriber/obj/Debug/net9.0/youtubeTranscriber.genruntimeconfig.cache
+/Users/timgibson/Repos/NewsSyndicate/passportBroNews/youtubeTranscriber/obj/Debug/net9.0/ref/youtubeTranscriber.dll
