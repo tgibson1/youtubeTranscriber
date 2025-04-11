@@ -1,62 +1,128 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using Newtonsoft.Json;  // Install Newtonsoft.Json via NuGet.
 
 namespace youtubeTranscriber
 {
     class Program
     {
-        /// <summary>
-        /// Entry point for the application.
-        /// Usage: youtubeTranscriber <YouTube Video URL>
-        /// </summary>
-        /// <param name="args">Command line arguments (expects a YouTube video URL)</param>
         static void Main(string[] args)
         {
-            // Check if a YouTube URL was provided as an argument.
             if (args.Length == 0)
             {
-                Console.WriteLine("Usage: youtubeTranscriber <YouTube Video URL>");
+                Console.WriteLine("Usage: youtubeTranscriber <YouTube Video or Channel URL>");
                 return;
             }
+            
+            string inputUrl = args[0];
 
-            // Retrieve the video URL from the command-line arguments.
-            string videoUrl = args[0];
-            Console.WriteLine("Downloading audio from: " + videoUrl);
-
-            // Define the output template that yt-dlp will use and the expected output file.
-            string outputTemplate = "audio.%(ext)s";  // yt-dlp will replace %(ext)s with the appropriate extension.
-            string audioFile = "audio.mp3";           // We are extracting audio in mp3 format.
-
-            // Step 1: Download the audio using yt-dlp.
-            if (!DownloadAudio(videoUrl, outputTemplate))
+            // Check for channel URLs including the new "@" handle format.
+            if (inputUrl.Contains("youtube.com/channel") ||
+                inputUrl.Contains("youtube.com/c/") ||
+                inputUrl.Contains("youtube.com/@"))
             {
-                Console.WriteLine("Audio download failed.");
-                return;
-            }
-
-            // Step 2: Check if the file exists, then transcribe using a Python script.
-            if (File.Exists(audioFile))
-            {
-                Console.WriteLine("Audio downloaded successfully. Transcribing...");
-
-                // Call the Python script to get the transcription.
-                string transcription = TranscribeAudio(audioFile);
-                Console.WriteLine("Transcription:");
-                Console.WriteLine(transcription);
+                ProcessChannel(inputUrl);
             }
             else
             {
-                Console.WriteLine("Audio file not found. Something went wrong during the download process.");
+                // Process single video using a generic folder name.
+                ProcessVideo(inputUrl, "SingleVideoFolder");
+            }
+        }
+
+        /// <summary>
+        /// Processes a single video URL:
+        /// Downloads audio, transcribes, and saves in the designated folder.
+        /// </summary>
+        static void ProcessVideo(string videoUrl, string folderPath)
+        {
+            Console.WriteLine("Processing video: " + videoUrl);
+            Directory.CreateDirectory(folderPath);
+
+            // Adjust output template to use folderPath.
+            string outputTemplate = Path.Combine(folderPath, "audio.%(ext)s");
+            string audioFile = Path.Combine(folderPath, "audio.mp3");
+
+            if (!DownloadAudio(videoUrl, outputTemplate))
+            {
+                Console.WriteLine("Audio download failed for: " + videoUrl);
+                return;
+            }
+            if (File.Exists(audioFile))
+            {
+                Console.WriteLine("Audio downloaded successfully. Transcribing...");
+                string transcription = TranscribeAudio(audioFile);
+                // Save transcription to a text file.
+                File.WriteAllText(Path.Combine(folderPath, "transcription.txt"), transcription);
+                Console.WriteLine("Transcription saved for: " + videoUrl);
+            }
+            else
+            {
+                Console.WriteLine("Audio file not found for: " + videoUrl);
+            }
+        }
+
+        /// <summary>
+        /// Processes an entire channel by fetching video metadata, then downloading and transcribing each video.
+        /// </summary>
+        static void ProcessChannel(string channelUrl)
+        {
+            Console.WriteLine("Processing channel: " + channelUrl);
+            // Use yt-dlp to dump JSON info for all videos on the channel.
+            ProcessStartInfo psi = new ProcessStartInfo
+            {
+                FileName = "yt-dlp",
+                Arguments = $"--dump-json {channelUrl}",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            List<VideoMetadata> videos = new List<VideoMetadata>();
+            using (Process process = Process.Start(psi))
+            {
+                string line;
+                while ((line = process.StandardOutput.ReadLine()) != null)
+                {
+                    // Each line is a JSON object for one video.
+                    try
+                    {
+                        var metadata = JsonConvert.DeserializeObject<VideoMetadata>(line);
+                        videos.Add(metadata);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("JSON parse error: " + ex.Message);
+                    }
+                }
+                process.WaitForExit();
+            }
+
+            Console.WriteLine($"Found {videos.Count} videos.");
+
+            // Loop through each video and process.
+            foreach (var video in videos)
+            {
+                // Format upload_date from yyyyMMdd to yyyy-MM-dd.
+                string formattedDate = FormatDate(video.upload_date);
+                // Sanitize title to remove invalid file characters.
+                string sanitizedTitle = SanitizeTitle(video.title);
+                // Use the channel name for directory naming.
+                string channelName = "CharlesTyler"; 
+                string folderName = Path.Combine(channelName, $"{formattedDate}_{sanitizedTitle}");
+
+                // Build the full YouTube video URL using the video ID.
+                string videoUrl = "https://www.youtube.com/watch?v=" + video.id;
+                ProcessVideo(videoUrl, folderName);
             }
         }
 
         /// <summary>
         /// Downloads the audio stream from the YouTube video using yt-dlp.
         /// </summary>
-        /// <param name="videoUrl">URL of the YouTube video</param>
-        /// <param name="outputTemplate">Output template for yt-dlp (e.g., "audio.%(ext)s")</param>
-        /// <returns>True if the process executes; errors are logged otherwise</returns>
         static bool DownloadAudio(string videoUrl, string outputTemplate)
         {
             try
@@ -64,7 +130,8 @@ namespace youtubeTranscriber
                 ProcessStartInfo startInfo = new ProcessStartInfo
                 {
                     FileName = "yt-dlp",
-                    Arguments = $"--extract-audio --audio-format mp3 -o \"{outputTemplate}\" {videoUrl}",
+                    // Added "--cookies-from-browser chrome" to enable age-restricted downloads.
+                    Arguments = $"--extract-audio --audio-format mp3 --cookies-from-browser chrome -o \"{outputTemplate}\" {videoUrl}",
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
@@ -77,13 +144,10 @@ namespace youtubeTranscriber
                     string error = process.StandardError.ReadToEnd();
                     process.WaitForExit();
 
-                    Console.WriteLine("yt-dlp Output:");
-                    Console.WriteLine(output);
-
+                    Console.WriteLine("yt-dlp Output:\n" + output);
                     if (!string.IsNullOrEmpty(error))
                     {
-                        Console.WriteLine("yt-dlp Errors:");
-                        Console.WriteLine(error);
+                        Console.WriteLine("yt-dlp Errors:\n" + error);
                     }
                 }
                 return true;
@@ -96,21 +160,18 @@ namespace youtubeTranscriber
         }
 
         /// <summary>
-        /// Calls a Python script to transcribe the downloaded audio file.
-        /// Assumes a Python script named 'whisper_transcribe.py' is available in the working directory.
+        /// Calls the Whisper transcription tool to transcribe the downloaded audio.
+        /// Note: The audio file path is now quoted to properly handle spaces.
         /// </summary>
-        /// <param name="audioFilePath">Path to the downloaded audio file (e.g., audio.mp3)</param>
-        /// <returns>The transcription string from the Python script</returns>
         static string TranscribeAudio(string audioFilePath)
         {
             try
             {
-                // The command here calls "whisper" directly. Make sure that the whisper CLI is available in your PATH.
-                // You may adjust the arguments (e.g., --model small) as necessary.
+                // Quote the audioFilePath so that spaces in folder names do not break the command.
                 ProcessStartInfo startInfo = new ProcessStartInfo
                 {
-                    FileName = "whisper", // If not available via PATH, use the full path, e.g., "/opt/homebrew/bin/whisper"
-                    Arguments = $"{audioFilePath} --model small",
+                    FileName = "whisper",  // Adjust path as needed.
+                    Arguments = $"\"{audioFilePath}\" --model small",
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
@@ -119,15 +180,13 @@ namespace youtubeTranscriber
 
                 using (Process process = Process.Start(startInfo))
                 {
-                    // Capture standard output and error.
                     string output = process.StandardOutput.ReadToEnd();
                     string error = process.StandardError.ReadToEnd();
                     process.WaitForExit();
 
                     if (!string.IsNullOrWhiteSpace(error))
                     {
-                        Console.WriteLine("Whisper Errors:");
-                        Console.WriteLine(error);
+                        Console.WriteLine("Whisper Errors:\n" + error);
                     }
                     return output;
                 }
@@ -138,5 +197,40 @@ namespace youtubeTranscriber
                 return string.Empty;
             }
         }
+
+        /// <summary>
+        /// Helper method to format the date from "yyyyMMdd" to "yyyy-MM-dd".
+        /// </summary>
+        static string FormatDate(string yyyyMMdd)
+        {
+            if (yyyyMMdd.Length != 8)
+                return yyyyMMdd;
+            return $"{yyyyMMdd.Substring(0, 4)}-{yyyyMMdd.Substring(4, 2)}-{yyyyMMdd.Substring(6, 2)}";
+        }
+
+        /// <summary>
+        /// Helper method to sanitize a video title for use in folder names.
+        /// </summary>
+        static string SanitizeTitle(string title)
+        {
+            foreach (char c in Path.GetInvalidFileNameChars())
+            {
+                title = title.Replace(c, '_');
+            }
+            return title;
+        }
+    }
+
+    /// <summary>
+    /// Class used to deserialize video metadata from yt-dlp JSON.
+    /// The property names should match the JSON keys output by yt-dlp.
+    /// </summary>
+    class VideoMetadata
+    {
+        public string id { get; set; }
+        public string title { get; set; }
+        // upload_date is provided in "yyyyMMdd" format.
+        public string upload_date { get; set; }
+        // Additional fields can be added if needed.
     }
 }
